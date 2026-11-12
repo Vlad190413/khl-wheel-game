@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>🏒 КХЛ · Колесо фортуны</title>
+<style>
+  body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 20px; }
+  .container { max-width: 1150px; margin: 0 auto; }
+  header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 15px; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
+  h1 { margin: 0; font-size: 26px; }
+  .subtitle { color: #94a3b8; font-size: 14px; margin-top: 5px; }
+  button { background: #2563eb; color: #fff; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 14px; transition: 0.2s; }
+  button:hover { background: #1d4ed8; }
+  button:disabled { background: #475569; cursor: not-allowed; opacity: 0.6; }
+  button.secondary { background: #334155; }
+  button.secondary:hover { background: #475569; }
+  button.danger { background: #dc2626; }
+  button.danger:hover { background: #b91c1c; }
+  button.success { background: #16a34a; }
+  button.success:hover { background: #15803d; }
+  .tabs { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+  .tab-btn { background: #1e293b; border: 1px solid #334155; }
+  .tab-btn.active { background: #2563eb; border-color: #3b82f6; }
+  .panel { display: none; background: #1e293b; padding: 20px; border-radius: 12px; border: 1px solid #334155; }
+  .panel.active { display: block; }
+  .scoreboard { text-align: center; padding: 25px; background: #0f172a; border-radius: 12px; margin-bottom: 20px; }
+  .teams-row { display: flex; justify-content: center; align-items: center; gap: 30px; font-size: 24px; font-weight: bold; }
+  .team-box { padding: 12px 20px; border-radius: 10px; border: 2px solid transparent; transition: 0.2s; }
+  .team-box.active-turn { border-color: #38bdf8; background: rgba(56, 189, 248, 0.12); }
+  .score { font-size: 48px; color: #38bdf8; }
+  .attempts-badge { display: inline-block; margin-top: 6px; padding: 3px 10px; border-radius: 12px; background: #1e293b; font-size: 13px; color: #e2e8f0; }
+  .wheel-box { text-align: center; margin: 20px 0; }
+  .wheel-result { font-size: 22px; font-weight: bold; color: #fbbf24; min-height: 34px; margin: 15px 0; }
+  .controls { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+  table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
+  th, td { padding: 9px 8px; text-align: left; border-bottom: 1px solid #334155; }
+  th { background: #0f172a; color: #94a3b8; }
+  tr.my-team { background: rgba(220, 38, 38, 0.28); font-weight: bold; }
+  tr.playoff-line td { border-bottom: 2px dashed #38bdf8; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .card { background: #0f172a; padding: 15px; border-radius: 8px; border: 1px solid #334155; }
+  .roster-scroll { max-height: 440px; overflow-y: auto; padding-right: 6px; }
+  select, input { background: #0f172a; color: #fff; border: 1px solid #475569; padding: 8px 12px; border-radius: 6px; font-size: 14px; }
+  .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); justify-content: center; align-items: center; z-index: 100; }
+  .modal.open { display: flex; }
+  .modal-content { background: #1e293b; padding: 25px; border-radius: 12px; width: 450px; max-width: 90%; border: 1px solid #475569; }
+  .log-list { max-height: 180px; overflow-y: auto; font-size: 13px; color: #cbd5e1; background: #0f172a; padding: 10px; border-radius: 8px; margin-top: 10px; }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <div>
+      <h1>🏒 КХЛ · Колесо фортуны</h1>
+      <div class="subtitle">22 клуба · 50 туров · 550 матчей · Ваша команда: <strong id="headerTeam" style="color:#f87171;">Локомотив</strong></div>
+    </div>
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      <button class="success" onclick="startNewSeason()">🔄 Новый сезон</button>
+      <button class="secondary" onclick="openDevModal()">⚙ Разработчик</button>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('match', this)">🎡 Матч</button>
+    <button class="tab-btn" onclick="switchTab('table', this)">📊 Таблица</button>
+    <button class="tab-btn" onclick="switchTab('tours', this)">📋 Все туры</button>
+    <button class="tab-btn" onclick="switchTab('playoff', this)">🏆 Плей-офф</button>
+    <button class="tab-btn" onclick="switchTab('transfers', this)">💰 Трансферы</button>
+  </div>
+
+  <!-- ВКЛАДКА: МАТЧ -->
+  <div id="tab-match" class="panel active">
+    <div class="scoreboard">
+      <div style="color:#94a3b8; margin-bottom:10px;">Тур <span id="currentTourNum">1</span> · Матч <span id="currentMatchNum">1</span> <span id="homeMatchBonusTag" style="color:#4ade80; font-weight:bold;"></span></div>
+      <div class="teams-row">
+        <div id="homeTeamBox" class="team-box active-turn">
+          <div id="homeTeamName">Локомотив</div>
+          <div style="font-size:13px; color:#38bdf8; font-weight:normal;" id="homeTeamPower">Сила: 89 OVR</div>
+          <div class="attempts-badge" id="homeAttemptsBadge">Попытки: 0 / 10</div>
+        </div>
+        <span class="score"><span id="homeScore">0</span> : <span id="awayScore">0</span></span>
+        <div id="awayTeamBox" class="team-box">
+          <div id="awayTeamName">ЦСКА</div>
+          <div style="font-size:13px; color:#fbbf24; font-weight:normal;" id="awayTeamPower">Сила: 88 OVR</div>
+          <div class="attempts-badge" id="awayAttemptsBadge">Попытки: 0 / 10</div>
+        </div>
+      </div>
+      <div style="margin-top:12px; font-size:14px; color:#fbbf24; font-weight:600;" id="turnIndicator">🏒 Сейчас атакует: Локомотив (попытка 1 из 10)</div>
+      <div style="margin-top:4px; font-size:13px; color:#94a3b8;" id="oddsBanner">Фаворит: Локомотив (+1 OVR)</div>
+    </div>
+    <div class="wheel-box">
+      <div class="wheel-result" id="wheelOutcome">Нажмите «Крутить колесо», чтобы выполнить бросок</div>
+      <div class="controls">
+        <button id="spinBtn" onclick="spinWheel()">🎡 Крутить колесо (Бросок)</button>
+        <button class="secondary" onclick="resetCurrentMatch()">↩ Ещё раз</button>
+        <button class="success" onclick="recordMatch()">✔ Записать в таблицу</button>
+        <button class="secondary" onclick="nextMatch()">Следующий матч ▶</button>
+      </div>
+    </div>
+    <div class="log-list" id="matchEventsLog">События матча появятся здесь...</div>
+  </div>
+
+  <!-- ВКЛАДКА: ТАБЛИЦА ПО КОНФЕРЕНЦИЯМ -->
+  <div id="tab-table" class="panel">
+    <h3>📊 Турнирная таблица КХЛ по конференциям</h3>
+    <p style="font-size:13px; color:#94a3b8;">Пунктирной линией отделена зона плей-офф (топ-8 команд каждой конференции).</p>
+    <div class="grid-2">
+      <div class="card">
+        <h4 style="margin-top:0; color:#38bdf8;">Западная конференция</h4>
+        <table>
+          <thead>
+            <tr><th>#</th><th>Клуб</th><th>И</th><th>В</th><th>П</th><th>Шайбы</th><th>Очки</th></tr>
+          </thead>
+          <tbody id="westStandingsBody"></tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h4 style="margin-top:0; color:#fbbf24;">Восточная конференция</h4>
+        <table>
+          <thead>
+            <tr><th>#</th><th>Клуб</th><th>И</th><th>В</th><th>П</th><th>Шайбы</th><th>Очки</th></tr>
+          </thead>
+          <tbody id="eastStandingsBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ВКЛАДКА: ВСЕ ТУРЫ -->
+  <div id="tab-tours" class="panel">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
+      <h3>📋 Пары тура <span id="scheduleTourNum">1</span></h3>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button class="secondary" onclick="undoLastMatch()">Отменить последний матч</button>
+        <button class="success" onclick="startNewSeason()">🔄 Новый сезон (с составами)</button>
+        <button class="danger" onclick="resetSeason()">Полный сброс</button>
+      </div>
+    </div>
+    <div id="tourPairsList" class="grid-2"></div>
+  </div>
+
+  <!-- ВКЛАДКА: ПЛЕЙ-ОФФ -->
+  <div id="tab-playoff" class="panel">
+    <div class="grid-2">
+      <div class="card">
+        <h3>Западная конференция · сетка</h3>
+        <div id="westPlayoff"></div>
+      </div>
+      <div class="card">
+        <h3>Восточная конференция · сетка</h3>
+        <div id="eastPlayoff"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ВКЛАДКА: ТРАНСФЕРЫ -->
+  <div id="tab-transfers" class="panel">
+    <h2>💰 Трансферы</h2>
+    <p>Покупайте сильных игроков у других клубов КХЛ — это повышает силу (OVR) вашей команды. За каждый домашний матч вы получаете <strong>+2 млн ₽</strong> за болельщиков.</p>
+    <div style="display:flex; gap:15px; align-items:center; flex-wrap:wrap; margin-bottom:20px;">
+      <label>Ваша команда:
+        <select id="myTeamSelect" onchange="changeMyTeam(this.value)"></select>
+      </label>
+      <div>Бюджет: <strong id="teamBudget" style="color:#4ade80;">250 млн ₽</strong></div>
+      <div>Сила состава: <strong id="myTeamOvrBadge" style="color:#38bdf8;">89 OVR</strong></div>
+      <button class="danger" onclick="resetTransfers()">Сбросить трансферы</button>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <h4 style="margin-top:0;">Состав: <span id="myRosterTitle">Локомотив</span> (<span id="myRosterCount">0</span> чел.)</h4>
+        <div id="myRosterList" class="roster-scroll"></div>
+      </div>
+      <div class="card">
+        <h4 style="margin-top:0;">Рынок игроков (другие клубы)</h4>
+        <div style="margin-bottom:10px;">
+          <select id="marketClubSelect" onchange="renderMarket()" style="width:100%;"></select>
+        </div>
+        <div id="marketRosterList" class="roster-scroll"></div>
+      </div>
+    </div>
+
+    <h3 style="margin-top:20px;">📜 История финансов и трансферов</h3>
+    <div class="log-list" id="transferHistory">Операций пока не было.</div>
+  </div>
+</div>
+
+<!-- МОДАЛЬНОЕ ОКНО РАЗРАБОТЧИКА С ПАРОЛЕМ -->
+<div id="devModal" class="modal">
+  <div class="modal-content">
+    <h3>🔒 Доступ разработчика</h3>
+    <div id="devAuthBox">
+      <p>Введите пароль разработчика для настройки шансов колеса:</p>
+      <div style="display:flex; gap:10px; margin-bottom:10px;">
+        <input type="password" id="devPasswordInput" placeholder="Введите пароль..." onkeydown="if(event.key==='Enter') unlockDev()">
+        <button onclick="unlockDev()">Войти</button>
+      </div>
+      <div id="devAuthError" style="color:#f87171; font-size:13px; margin-bottom:10px; display:none;">❌ Неверный пароль!</div>
+      <button class="secondary" onclick="closeDevModal()">Закрыть</button>
+    </div>
+    <div id="devSettingsBox" style="display:none;">
+      <h3>⚙ Базовый шанс гола за 1 попытку</h3>
+      <p style="font-size:13px; color:#94a3b8;">Базовый шанс забить 1 гол за одну из 10 попыток (дополнительно корректируется силой OVR команд).</p>
+      <div id="weightsContainer"></div>
+      <div style="margin-top:15px; display:flex; gap:10px;">
+        <button class="success" onclick="applyWeights()">Применить</button>
+        <button class="secondary" onclick="resetWeights()">Сбросить</button>
+        <button class="danger" onclick="closeDevModal()">Закрыть</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const CLUBS_DATA = [
+  { name: 'Локомотив', conf: 'Запад', rating: 89 },
+  { name: 'СКА', conf: 'Запад', rating: 89 },
+  { name: 'ЦСКА', conf: 'Запад', rating: 88 },
+  { name: 'Динамо М', conf: 'Запад', rating: 86 },
+  { name: 'Спартак', conf: 'Запад', rating: 85 },
+  { name: 'Торпедо', conf: 'Запад', rating: 83 },
+  { name: 'Северсталь', conf: 'Запад', rating: 82 },
+  { name: 'Динамо Мн', conf: 'Запад', rating: 82 },
+  { name: 'Шанхайские Драконы', conf: 'Запад', rating: 81 },
+  { name: 'Лада', conf: 'Запад', rating: 78 },
+  { name: 'Сочи', conf: 'Запад', rating: 76 },
+  { name: 'Металлург', conf: 'Восток', rating: 89 },
+  { name: 'Авангард', conf: 'Восток', rating: 88 },
+  { name: 'Ак Барс', conf: 'Восток', rating: 87 },
+  { name: 'Салават Юлаев', conf: 'Восток', rating: 85 },
+  { name: 'Трактор', conf: 'Восток', rating: 85 },
+  { name: 'Автомобилист', conf: 'Восток', rating: 84 },
+  { name: 'Нефтехимик', conf: 'Восток', rating: 80 },
+  { name: 'Барыс', conf: 'Восток', rating: 79 },
+  { name: 'Сибирь', conf: 'Восток', rating: 79 },
+  { name: 'Амур', conf: 'Восток', rating: 78 },
+  { name: 'Адмирал', conf: 'Восток', rating: 77 }
+];
+
+const REAL_ROSTERS_RAW = {
+  'Локомотив': [
+    'Даниил Исаев (Врт, #92)', 'Алексей Мельничук (Врт, #30)',
+    'Рушан Рафиков (Защ, #87)', 'Александр Елесин (Защ, #4)', 'Алексей Береглазов (Защ, #5)', 'Мартин Гернат (Защ, #28)', 'Андрей Сергеев (Защ, #93)', 'Дмитрий Симашев (Защ, #73)', 'Никита Черепанов (Защ, #21)',
+    'Александр Радулов (Нап, #47)', 'Максим Шалунов (Нап, #78)', 'Артур Каюмов (Нап, #16)', 'Максим Берёзкин (Нап, #72)', 'Егор Сурин (Нап, #70)', 'Георгий Иванов (Нап, #10)', 'Александр Полунин (Нап, #90)', 'Павел Красковский (Нап, #63)', 'Денис Алексеев (Нап, #91)', 'Байрон Фрэз (Нап, #29)', 'Даниил Бут (Нап, #13)', 'Степан Никулин (Нап, #96)', 'Никита Кирьянов (Нап, #34)'
+  ],
+  'СКА': [
+    'Сергей Иванов (Врт, #1)', 'Артемий Плешков (Врт, #73)', 'Егор Заврагин (Врт, #30)', 'Павел Мойсевич (Врт, #52)',
+    'Никита Зайцев (Защ, #22)', 'Тревор Мёрфи (Защ, #8)', 'Андрей Педан (Защ, #3)', 'Сергей Сапего (Защ, #9)', 'Алексей Маклюков (Защ, #85)', 'Даниил Мироманов (Защ, #62)', 'Егор Савиков (Защ, #34)', 'Николай Кныжов (Защ, #5)', 'Владислав Сёмин (Защ, #42)', 'Маркус Филлипс (Защ, #18)',
+    'Николай Голдобин (Нап, #87)', 'Сергей Плотников (Нап, #16)', 'Василий Глотов (Нап, #7)', 'Василий Атанасов (Нап, #17)', 'Захар Бардаков (Нап, #70)', 'Данил Аймурзин (Нап, #53)', 'Рокко Гримальди (Нап, #23)', 'Скотт Уилсон (Нап, #20)', 'Линус Вайссбах (Нап, #13)', 'Валентин Зыков (Нап, #90)', 'Игорь Ларионов-мл. (Нап, #69)', 'Матвей Короткий (Нап, #71)', 'Николай Чебыкин (Нап, #97)', 'Игнат Лутфуллин (Нап, #91)', 'Никита Дишковский (Нап, #55)'
+  ],
+  'ЦСКА': [
+    'Александр Самонов (Врт, #31)', 'Дмитрий Гамзин (Врт, #33)', 'Пётр Андреянов (Врт, #64)',
+    'Никита Нестеров (Защ, #89)', 'Егор Замула (Защ, #9)', 'Дмитрий Саморуков (Защ, #5)', 'Жереми Руа (Защ, #79)', 'Никита Охотюк (Защ, #55)', 'Владислав Провольнев (Защ, #45)', 'Ник Эберт (Защ, #7)', 'Иван Патрихаев (Защ, #28)', 'Артём Барабоша (Защ, #80)', 'Мак Холлоуэлл (Защ, #98)',
+    'Клим Костин (Нап, #10)', 'Николай Коваленко (Нап, #51)', 'Максим Соркин (Нап, #27)', 'Прохор Полтапов (Нап, #13)', 'Дмитрий Бучельников (Нап, #72)', 'Денис Гурьянов (Нап, #34)', 'Иван Дроздов (Нап, #19)', 'Павел Карнаухов (Нап, #15)', 'Максим Мамин (Нап, #98)', 'Марат Хайруллин (Нап, #61)', 'Дерек Барак (Нап, #26)', 'Райли Савчук (Нап, #18)', 'Виталий Абрамов (Нап, #11)', 'Владислав Каменев (Нап, #94)'
+  ],
+  'Динамо М': [
+    'Владислав Подъяпольский (Врт, #59)', 'Максим Моторыгин (Врт, #99)', 'Вадим Жеренко (Врт, #20)',
+    'Игорь Ожиганов (Защ, #92)', 'Даниил Пыленков (Защ, #45)', 'Никита Новиков (Защ, #94)', 'Артём Блажиевский (Защ, #88)', 'Сергей Зборовский (Защ, #5)', 'Артём Сергеев (Защ, #93)', 'Магомед Шараканов (Защ, #96)', 'Лука Профака (Защ, #22)',
+    'Джордан Уил (Нап, #91)', 'Максим Летунов (Нап, #7)', 'Никита Коростелёв (Нап, #35)', 'Ник Меркли (Нап, #10)', 'Дилан Сайкура (Нап, #90)', 'Иван Игумнов (Нап, #14)', 'Артём Швец-Роговой (Нап, #57)', 'Булат Шафигуллин (Нап, #29)', 'Никита Тертышный (Нап, #38)', 'Павел Шэн (Нап, #16)', 'Игорь Мартынов (Нап, #70)', 'Егор Римашевский (Нап, #87)', 'Дмитрий Зуган (Нап, #77)', 'Артём Бондарь (Нап, #47)'
+  ],
+  'Спартак': [
+    'Иван Федотов (Врт, #28)', 'Артём Загидулин (Врт, #50)', 'Евгений Волохин (Врт, #35)', 'Егор Мидлак (Врт, #30)',
+    'Андрей Миронов (Защ, #94)', 'Дмитрий Вишневский (Защ, #55)', 'Джозеф Кин (Защ, #4)', 'Уилл Райлли (Защ, #44)', 'Кристиан Ярош (Защ, #48)', 'Александр Брынцев (Защ, #74)', 'Артемий Князев (Защ, #8)', 'Даниил Орлов (Защ, #62)', 'Роман Бычков (Защ, #70)', 'Даниил Соболев (Защ, #33)',
+    'Павел Порядин (Нап, #24)', 'Максим Комтуа (Нап, #10)', 'Александр Гальченюк (Нап, #88)', 'Михаил Мальцев (Нап, #13)', 'Александр Пашин (Нап, #26)', 'Герман Рубцов (Нап, #95)', 'Даниил Гутик (Нап, #78)', 'Лукас Локхарт (Нап, #20)', 'Александр Беляев (Нап, #98)', 'Демид Мансуров (Нап, #65)', 'Данил Пивчулин (Нап, #16)', 'Егор Филин (Нап, #99)', 'Никита Холодилин (Нап, #97)', 'Сергей Лукьянцев (Нап, #76)'
+  ],
+  'Торпедо': [
+    'Денис Костин (Врт, #35)', 'Дмитрий Шугаев (Врт, #30)',
+    'Богдан Конюшков (Защ, #6)', 'Даниил Журавлёв (Защ, #58)', 'Никита Камалов (Защ, #89)', 'Ярослав Дыбленко (Защ, #73)', 'Антон Сизов (Защ, #21)', 'Роберт Нарделла (Защ, #2)', 'Скутер Брики (Защ, #4)',
+    'Владислав Фирстов (Нап, #10)', 'Сергей Гончарук (Нап, #16)', 'Михаил Воробьёв (Нап, #42)', 'Владимир Ткачёв (Нап, #55)', 'Игорь Гераськин (Нап, #89)', 'Майкл Веккьоне (Нап, #88)', 'Егор Виноградов (Нап, #92)', 'Андрей Белевич (Нап, #69)', 'Никита Шавин (Нап, #80)', 'Даниил Сероух (Нап, #97)', 'Амир Гараев (Нап, #77)', 'Матвей Поляков (Нап, #17)'
+  ],
+  'Северсталь': [
+    'Александр Самойлов (Врт, #29)', 'Константин Шостак (Врт, #1)',
+    'Иоаннис Калдис (Защ, #7)', 'Марк Барберио (Защ, #44)', 'Тимофей Давыдов (Защ, #27)', 'Никита Камалов (Защ, #55)', 'Григорий Ващенко (Защ, #16)',
+    'Кирилл Пилипенко (Нап, #13)', 'Данил Аймурзин (Нап, #53)', 'Руслан Абросимов (Нап, #11)', 'Михаил Ильин (Нап, #88)', 'Адам Лишка (Нап, #23)', 'Никита Коростелёв (Нап, #35)', 'Алексей Кручинин (Нап, #78)', 'Александр Скоренов (Нап, #14)', 'Иван Подшивалов (Нап, #97)'
+  ],
+  'Динамо Мн': [
+    'Закари Фукале (Врт, #60)', 'Василий Демченко (Врт, #94)', 'Евгений Прохоров (Врт, #31)',
+    'Ксавье Уэлле (Защ, #61)', 'Николас Мелош (Защ, #10)', 'Кристиан Хенкель (Защ, #18)', 'Брэйди Лайл (Защ, #33)', 'Тай Смит (Защ, #24)', 'Джошуа Брук (Защ, #27)', 'Джейк Бишофф (Защ, #28)', 'Дмитрий Кузьмин (Защ, #93)',
+    'Сэм Энас (Нап, #7)', 'Алекс Лимож (Нап, #12)', 'Николя Обе-Кюбель (Нап, #96)', 'Крис Тирни (Нап, #71)', 'Ретт Гарднер (Нап, #22)', 'Владимир Алистров (Нап, #72)', 'Станислав Галиев (Нап, #97)', 'Илья Усов (Нап, #80)', 'Сергей Кузнецов (Нап, #14)', 'Никита Пышкайло (Нап, #91)', 'Даниил Сотишвили (Нап, #26)', 'Даниил Липский (Нап, #9)', 'Сергей Калинин (Нап, #40)'
+  ],
+  'Шанхайские Драконы': [
+    'Патрик Рыбар (Врт, #42)', 'Амир Мифтахов (Врт, #35)', 'Павел Хомченко (Врт, #30)', 'Андрей Кареев (Врт, #1)',
+    'Бреннан Менелл (Защ, #27)', 'Павел Коледов (Защ, #77)', 'Кейлен Эддисон (Защ, #6)', 'Ник Чичек (Защ, #4)', 'Тёрнер Оттенбрайт (Защ, #2)', 'Адам Кленденинг (Защ, #5)', 'Дойл Сомерби (Защ, #27)', 'Бен Харпур (Защ, #44)',
+    'Дмитрий Яшкин (Нап, #23)', 'Кевин Лабанк (Нап, #12)', 'Николас Петан (Нап, #7)', 'Никита Александров (Нап, #59)', 'Михаил Котляревский (Нап, #53)', 'Тахир Мингачёв (Нап, #63)', 'Владислав Барулин (Нап, #22)', 'Бретт Мюррэй (Нап, #21)', 'Райли Саттер (Нап, #14)', 'Дживани Смит (Нап, #54)', 'Нэйт Сукезе (Нап, #37)', 'Егор Соловьёв (Нап, #17)'
+  ],
+  'Лада': [
+    'Владислав Подъяпольский (Врт, #1)', 'Максим Третьяк (Врт, #20)',
+    'Мислав Росандич (Защ, #3)', 'Максим Березин (Защ, #55)', 'Владислав Сёмин (Защ, #42)', 'Евгений Калабушкин (Защ, #4)', 'Глеб Семёнов (Защ, #22)',
+    'Остап Сафин (Нап, #17)', 'Бен Кинг (Нап, #14)', 'Никита Михайлов (Нап, #66)', 'Никита Сетдиков (Нап, #88)', 'Евгений Грошев (Нап, #63)', 'Иван Романов (Нап, #91)', 'Дмитрий Кугрышев (Нап, #18)', 'Андрей Алтыбармакян (Нап, #95)', 'Архип Неколенко (Нап, #71)'
+  ],
+  'Сочи': [
+    'Иван Бочаров (Врт, #60)', 'Сергей Иванов (Врт, #30)',
+    'Тимур Ахияров (Защ, #76)', 'Виктор Балдаев (Защ, #74)', 'Ярослав Беляков (Защ, #13)', 'Фёдор Крощинский (Защ, #5)', 'Данил Мокрушев (Защ, #8)',
+    'Артур Тянулин (Нап, #13)', 'Кирилл Рассказов (Нап, #92)', 'Денис Венгрыжановский (Нап, #10)', 'Кирилл Воронин (Нап, #41)', 'Сергей Попов (Нап, #77)', 'Тимур Хафизов (Нап, #11)', 'Данил Авершин (Нап, #27)', 'Амир Гараев (Нап, #71)'
+  ],
+  'Металлург': [
+    'Илья Набоков (Врт, #30)', 'Александр Смолин (Врт, #20)', 'Егор Крамзин (Врт, #50)',
+    'Егор Яковлев (Защ, #44)', 'Робин Пресс (Защ, #21)', 'Валерий Орехов (Защ, #9)', 'Артём Минулин (Защ, #72)', 'Владислав Провольнев (Защ, #55)', 'Макар Хабаров (Защ, #56)', 'Данила Паливко (Защ, #87)', 'Александр Сиряцкий (Защ, #74)',
+    'Владимир Ткачёв (Нап, #19)', 'Сергей Толчинский (Нап, #28)', 'Никита Михайлис (Нап, #11)', 'Дмитрий Силантьев (Нап, #14)', 'Роман Канцеров (Нап, #8)', 'Даниил Вовченко (Нап, #29)', 'Руслан Исхаков (Нап, #22)', 'Нэйтан Тодд (Нап, #27)', 'Люк Джонсон (Нап, #47)', 'Егор Коробкин (Нап, #94)', 'Никита Коротков (Нап, #96)', 'Степан Старков (Нап, #18)', 'Андрей Козлов (Нап, #39)'
+  ],
+  'Авангард': [
+    'Никита Серебряков (Врт, #54)', 'Иван Просветов (Врт, #1)', 'Сергей Долгов (Врт, #61)',
+    'Дамир Шарипзянов (Защ, #44)', 'Семён Чистяков (Защ, #66)', 'Михаил Гуляев (Защ, #84)', 'Макс Лажуа (Защ, #58)', 'Джозеф Чеккони (Защ, #55)', 'Кирилл Адамчук (Защ, #77)', 'Марсель Ибрагимов (Защ, #28)', 'Вячеслав Войнов (Защ, #26)', 'Евгений Кашников (Защ, #25)',
+    'Джош Ливо (Нап, #90)', 'Константин Окулов (Нап, #17)', 'Майкл Маклауд (Нап, #9)', 'Эндрю Потуральски (Нап, #22)', 'Наиль Якупов (Нап, #65)', 'Николай Прохоркин (Нап, #74)', 'Седрик Пакетт (Нап, #13)', 'Дмитрий Рашевский (Нап, #96)', 'Егор Афанасьев (Нап, #11)', 'Василий Пономарёв (Нап, #92)', 'Александр Волков (Нап, #83)', 'Артём Ильенко (Нап, #34)', 'Кирилл Долженков (Нап, #26)'
+  ],
+  'Ак Барс': [
+    'Тимур Билялов (Врт, #82)', 'Максим Арефьев (Врт, #20)', 'Иван Кузнецов (Врт, #36)',
+    'Митчелл Миллер (Защ, #58)', 'Никита Лямкин (Защ, #96)', 'Алексей Марченко (Защ, #53)', 'Альберт Яруллин (Защ, #33)', 'Степан Фальковский (Защ, #7)', 'Илья Карпухин (Защ, #89)', 'Никита Евсеев (Защ, #44)', 'Константин Лучевников (Защ, #65)',
+    'Александр Барабанов (Нап, #17)', 'Артём Галимов (Нап, #95)', 'Кирилл Семёнов (Нап, #94)', 'Александр Хмелевски (Нап, #55)', 'Григорий Денисенко (Нап, #14)', 'Кевин Хейз (Нап, #13)', 'Денис Зернов (Нап, #16)', 'Илья Сафонов (Нап, #24)', 'Никита Дыняк (Нап, #86)', 'Дмитрий Кателевский (Нап, #92)', 'Алексей Бывальцев (Нап, #22)', 'Алексей Пустозёров (Нап, #71)', 'Семён Терехов (Нап, #59)', 'Андрей Стась (Нап, #23)'
+  ],
+  'Салават Юлаев': [
+    'Семён Вязовой (Врт, #35)', 'Илья Коновалов (Врт, #70)', 'Иван Бочаров (Врт, #60)',
+    'Дин Стюарт (Защ, #18)', 'Григорий Панин (Защ, #11)', 'Никита Зоркин (Защ, #52)', 'Ярослав Цулыгин (Защ, #73)', 'Алексей Василевский (Защ, #93)', 'Ефим Гуркин (Защ, #49)', 'Евгений Кулик (Защ, #43)', 'Артём Земчёнок (Защ, #88)', 'Руслан Педан (Защ, #53)',
+    'Шелдон Ремпал (Нап, #56)', 'Вадим Шипачёв (Нап, #87)', 'Джек Родуолд (Нап, #21)', 'Девин Броссо (Нап, #57)', 'Мэттью Маджио (Нап, #81)', 'Данил Алалыкин (Нап, #61)', 'Егор Сучков (Нап, #72)', 'Владислав Ефремов (Нап, #65)', 'Глеб Кузьмин (Нап, #17)', 'Александр Жаровский (Нап, #97)', 'Артём Горшков (Нап, #13)', 'Прохор Корбит (Нап, #59)'
+  ],
+  'Трактор': [
+    'Хенрик Хаукеланд (Врт, #30)', 'Сергей Мыльников (Врт, #1)',
+    'Григорий Дронов (Защ, #72)', 'Сергей Телегин (Защ, #55)', 'Артём Блажиевский (Защ, #88)', 'Владислав Валенцов (Защ, #9)', 'Андрей Прибыльский (Защ, #22)', 'Иван Выдренков (Защ, #84)',
+    'Михаил Григоренко (Нап, #25)', 'Андрей Светлаков (Нап, #87)', 'Никита Сошников (Нап, #90)', 'Борис Катчук (Нап, #14)', 'Натан Легаре (Нап, #19)', 'Михаил Рольгизер (Нап, #71)', 'Андрей Чивилёв (Нап, #44)', 'Максим Джиошвили (Нап, #11)', 'Павел Шэн (Нап, #16)', 'Александр Рыков (Нап, #27)'
+  ],
+  'Автомобилист': [
+    'Евгений Аликин (Врт, #1)', 'Владимир Галкин (Врт, #30)',
+    'Ник Эберт (Защ, #7)', 'Джесси Блэкер (Защ, #9)', 'Кирилл Воробьёв (Защ, #55)', 'Сергей Зборовский (Защ, #5)', 'Никита Трямкин (Защ, #88)', 'Максим Осипов (Защ, #23)',
+    'Анатолий Голышев (Нап, #15)', 'Даниэль Спронг (Нап, #11)', 'Адам Ружичка (Нап, #21)', 'Александр Барабанов (Нап, #17)', 'Александр Кадейкин (Нап, #78)', 'Данил Гущин (Нап, #66)', 'Роман Горбунов (Нап, #92)', 'Антон Слепышев (Нап, #72)', 'Максим Денежкин (Нап, #24)', 'Артём Каштанов (Нап, #76)'
+  ],
+  'Нефтехимик': [
+    'Филипп Долганов (Врт, #35)', 'Артём Загидулин (Врт, #30)',
+    'Лукаш Клок (Защ, #3)', 'Илья Пастухов (Защ, #44)', 'Максим Федотов (Защ, #77)', 'Владислав Леонтьев (Защ, #9)', 'Никита Хлыстов (Защ, #55)',
+    'Андрей Белозёров (Нап, #71)', 'Булат Шафигуллин (Нап, #29)', 'Евгений Митякин (Нап, #98)', 'Жан-Себастьен Ди (Нап, #19)', 'Райли Барбер (Нап, #13)', 'Вячеслав Лещенко (Нап, #61)', 'Герман Точилкин (Нап, #88)', 'Никита Хоружев (Нап, #91)'
+  ],
+  'Барыс': [
+    'Андрей Шутов (Врт, #43)', 'Никита Бояркин (Врт, #1)', 'Хантер Шепард (Врт, #35)',
+    'Адиль Бекетаев (Защ, #87)', 'Самат Данияр (Защ, #24)', 'Тайлер Уотерспун (Защ, #26)', 'Джейк Масси (Защ, #2)', 'Логан Дэй (Защ, #4)', 'Иэн Маккошен (Защ, #5)', 'Чейз Приски (Защ, #8)',
+    'Роман Старченко (Нап, #48)', 'Майк Веккьоне (Нап, #88)', 'Джастин Бэйли (Нап, #95)', 'Мэйсон Морелли (Нап, #11)', 'Тайс Томпсон (Нап, #19)', 'Гарретт Пилон (Нап, #22)', 'Алихан Асетов (Нап, #96)', 'Кирилл Савицкий (Нап, #84)', 'Аркадий Шестаков (Нап, #64)', 'Батырлан Муратов (Нап, #10)', 'Алихан Омирбеков (Нап, #71)'
+  ],
+  'Сибирь': [
+    'Антон Красоткин (Врт, #33)', 'Денис Костин (Врт, #72)',
+    'Даррен Диц (Защ, #44)', 'Тревор Мёрфи (Защ, #8)', 'Егор Аланов (Защ, #21)', 'Иван Мищенко (Защ, #47)', 'Михаил Орлов (Защ, #74)', 'Максим Осипов (Защ, #23)', 'Даниил Чайка (Защ, #5)', 'Даниил Валитов (Защ, #91)',
+    'Тэйлор Бек (Нап, #85)', 'Энди Андреофф (Нап, #10)', 'Сергей Широков (Нап, #52)', 'Владимир Бутузов (Нап, #71)', 'Валентин Пьянов (Нап, #26)', 'Никита Коротков (Нап, #96)', 'Максим Карпов (Нап, #9)', 'Алексей Яковлев (Нап, #88)'
+  ],
+  'Амур': [
+    'Максим Дорожко (Врт, #83)', 'Александр Трушков (Врт, #1)', 'Виктор Кобозев (Врт, #60)',
+    'Вячеслав Войнов (Защ, #26)', 'Алексей Василевский (Защ, #93)', 'Егор Воронков (Защ, #57)', 'Данила Галенюк (Защ, #3)', 'Егор Рыков (Защ, #17)', 'Алексей Соловьёв (Защ, #24)', 'Василий Мачулин (Защ, #23)', 'Дмитрий Костенко (Защ, #8)',
+    'Виталий Абрамов (Нап, #11)', 'Александр Дергачёв (Нап, #18)', 'Данил Юртайкин (Нап, #50)', 'Иван Чехович (Нап, #82)', 'Олег Ли (Нап, #90)', 'Кирилл Петьков (Нап, #98)', 'Кирилл Пилипенко (Нап, #13)', 'Ярослав Лихачёв (Нап, #10)', 'Семён Демидов (Нап, #61)', 'Иван Климович (Нап, #16)', 'Максим Кровяков (Нап, #88)', 'Кирилл Ураков (Нап, #21)'
+  ],
+  'Адмирал': [
+    'Андрей Мишуров (Врт, #1)', 'Василий Демченко (Врт, #30)',
+    'Либор Шулак (Защ, #73)', 'Константин Лучевников (Защ, #65)', 'Григорий Ващенко (Защ, #16)', 'Артём Кудашов (Защ, #23)', 'Илья Морозов (Защ, #7)', 'Кирилл Жуков (Защ, #44)',
+    'Борна Рендулич (Нап, #22)', 'Дмитрий Завгородний (Нап, #17)', 'Александр Волков (Нап, #97)', 'Владислав Цицюра (Нап, #9)', 'Артём Пименов (Нап, #19)', 'Иван Муранов (Нап, #71)', 'Энтони Камара (Нап, #36)', 'Егор Чезганов (Нап, #11)', 'Даниэль Усманов (Нап, #47)', 'Иван Янченко (Нап, #70)', 'Оскар Булавчук (Нап, #72)'
+  ]
+};
+const DEFAULT_SECTORS = [
+  { label: 'ГОЛ! Шайба в воротах!', weight: 32, goals: 1 },
+  { label: 'Сейв вратаря! Щиток спас ворота', weight: 40, goals: 0 },
+  { label: 'Штанга! Звон каркаса ворот', weight: 14, goals: 0 },
+  { label: 'Бросок мимо створа', weight: 14, goals: 0 }
+];
+
+const SAVE_KEY = 'khl_wheel_save_v4';
+let state = JSON.parse(localStorage.getItem(SAVE_KEY)) || null;
+
+function buildAllRosters() {
+  const rosters = {};
+  CLUBS_DATA.forEach(club => {
+    const rawList = REAL_ROSTERS_RAW[club.name] || [];
+    rosters[club.name] = rawList.map((playerStr, index) => {
+      const ovr = Math.min(94, Math.max(74, club.rating + 3 - Math.floor(index / 4)));
+      const price = Math.max(15, Math.round((ovr - 65) * 2.1));
+      return { name: playerStr, price: price, ovr: ovr };
+    });
+  });
+  return rosters;
+}
+
+function getTeamPower(clubName) {
+  const roster = state && state.rosters && state.rosters[clubName] ? state.rosters[clubName] : [];
+  if (roster.length === 0) {
+    const baseClub = CLUBS_DATA.find(c => c.name === clubName);
+    return baseClub ? baseClub.rating : 80;
+  }
+  const sortedOvrs = roster.map(p => Number(p.ovr || 80)).sort((a, b) => b - a).slice(0, 15);
+  const avg = sortedOvrs.reduce((sum, val) => sum + val, 0) / sortedOvrs.length;
+  return Math.round(avg * 10) / 10;
+}
+
+function getAttemptSectors(attackerTeam, defenderTeam) {
+  const attOvr = getTeamPower(attackerTeam);
+  const defOvr = getTeamPower(defenderTeam);
+  const diff = attOvr - defOvr;
+
+  const goalMult = diff >= 0
+    ? Math.min(3.5, 1 + diff * 0.30)
+    : Math.max(0.20, 1 / (1 + Math.abs(diff) * 0.25));
+
+  return state.sectors.map(s => {
+    let effectiveWeight = Number(s.weight);
+    if (effectiveWeight > 0 && s.goals > 0) {
+      effectiveWeight = effectiveWeight * goalMult;
+    }
+    return { ...s, effectiveWeight: effectiveWeight };
+  });
+}
+
+function initNewState(keepRostersAndBudget = false) {
+  const savedRosters = keepRostersAndBudget && state && state.rosters ? state.rosters : buildAllRosters();
+  const savedBudget = keepRostersAndBudget && state && typeof state.budget === 'number' ? state.budget : 250;
+
+  state = {
+    myTeam: 'Локомотив',
+    budget: savedBudget,
+    tour: 1,
+    matchIndex: 0,
+    homeScore: 0,
+    awayScore: 0,
+    homeAttempts: 0,
+    awayAttempts: 0,
+    stats: CLUBS_DATA.map(c => ({ name: c.name, conf: c.conf, gp: 0, w: 0, l: 0, gf: 0, ga: 0, pts: 0 })),
+    history: [],
+    transferLogs: keepRostersAndBudget && state && state.transferLogs ? state.transferLogs : [],
+    rosters: savedRosters,
+    sectors: JSON.parse(JSON.stringify(DEFAULT_SECTORS)),
+    currentPairs: generateTourPairs(1)
+  };
+  saveState();
+}
+
+function generateTourPairs(tourNum) {
+  const others = CLUBS_DATA.map(c => c.name).filter(name => name !== 'Локомотив').sort(() => Math.random() - 0.5);
+  const shuffled = ['Локомотив', ...others];
+  if (tourNum % 2 === 0) {
+    const temp = shuffled.at(0);
+    shuffled.splice(0, 1, shuffled.at(1));
+    shuffled.splice(1, 1, temp);
+  }
+  const pairs = [];
+  for (let i = 0; i < shuffled.length; i += 2) {
+    pairs.push({ home: shuffled.at(i), away: shuffled.at(i + 1), played: false, score: null });
+  }
+  return pairs;
+}
+
+function saveState() {
+  localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+}
+
+if (!state) {
+  initNewState(false);
+} else {
+  state.myTeam = 'Локомотив';
+  state.sectors = JSON.parse(JSON.stringify(DEFAULT_SECTORS));
+  if (typeof state.homeAttempts !== 'number') state.homeAttempts = 0;
+  if (typeof state.awayAttempts !== 'number') state.awayAttempts = 0;
+  saveState();
+}
+
+function switchTab(tabId, btn) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + tabId).classList.add('active');
+  btn.classList.add('active');
+  renderAll();
+}
+
+function spinWheel() {
+  const pair = state.currentPairs.at(state.matchIndex) || { home: state.myTeam, away: 'ЦСКА' };
+  if (pair.played) return alert('Этот матч уже завершён и записан! Нажмите «Следующий матч».');
+
+  if (state.homeAttempts >= 10 && state.awayAttempts >= 10) {
+    return alert('Все 10 попыток у каждой команды использованы! Нажмите «✔ Записать в таблицу».');
+  }
+
+  const isHomeTurn = state.homeAttempts <= state.awayAttempts;
+  const attacker = isHomeTurn ? pair.home : pair.away;
+  const defender = isHomeTurn ? pair.away : pair.home;
+  const attemptNumber = (isHomeTurn ? state.homeAttempts : state.awayAttempts) + 1;
+
+  const attemptSectors = getAttemptSectors(attacker, defender);
+  const totalWeight = attemptSectors.reduce((sum, s) => sum + s.effectiveWeight, 0);
+  if (totalWeight <= 0) return alert('Все сектора имеют вес 0!');
+
+  let rnd = Math.random() * totalWeight;
+  let chosen = attemptSectors.at(0);
+  for (const s of attemptSectors) {
+    if (rnd < s.effectiveWeight) { chosen = s; break; }
+    rnd -= s.effectiveWeight;
+  }
+
+  const scored = chosen.goals > 0 ? 1 : 0;
+
+  if (isHomeTurn) {
+    state.homeAttempts++;
+    state.homeScore += scored;
+  } else {
+    state.awayAttempts++;
+    state.awayScore += scored;
+  }
+
+  const outcomeText = `🎡 [${attacker}, попытка ${attemptNumber}/10]: ${chosen.label}`;
+  document.getElementById('wheelOutcome').textContent = outcomeText;
+
+  const log = document.getElementById('matchEventsLog');
+  const goalMark = scored > 0 ? '🚨 ' : '• ';
+  log.innerHTML = `<div>${goalMark}<strong>${attacker}</strong> (попытка ${attemptNumber}/10): ${chosen.label} — Счёт <strong>${state.homeScore}:${state.awayScore}</strong></div>` + log.innerHTML;
+
+  saveState();
+  renderMatch();
+}
+
+function resetCurrentMatch() {
+  state.homeScore = 0;
+  state.awayScore = 0;
+  state.homeAttempts = 0;
+  state.awayAttempts = 0;
+  document.getElementById('wheelOutcome').textContent = 'Счёт и попытки сброшены. Начинают хозяева!';
+  document.getElementById('matchEventsLog').innerHTML = '';
+  saveState();
+  renderMatch();
+}
+function recordMatch() {
+  const pair = state.currentPairs.at(state.matchIndex);
+  if (!pair || pair.played) return alert('Этот матч уже записан! Нажмите «Следующий матч».');
+
+  if (state.homeAttempts < 10 || state.awayAttempts < 10) {
+    const proceed = confirm(`Команды использовали ещё не все 10 попыток (${state.homeAttempts}/10 и ${state.awayAttempts}/10). Завершить матч досрочно и записать в таблицу?`);
+    if (!proceed) return;
+  }
+
+  if (state.homeScore === state.awayScore) {
+    const homeOvr = getTeamPower(pair.home);
+    const awayOvr = getTeamPower(pair.away);
+    const homeOtChance = Math.min(0.92, Math.max(0.08, 0.5 + (homeOvr - awayOvr) * 0.08));
+    if (Math.random() < homeOtChance) {
+      state.homeScore += 1;
+    } else {
+      state.awayScore += 1;
+    }
+  }
+
+  pair.played = true;
+  pair.score = state.homeScore + ':' + state.awayScore;
+
+  const homeStat = state.stats.find(s => s.name === pair.home);
+  const awayStat = state.stats.find(s => s.name === pair.away);
+  homeStat.gp++; awayStat.gp++;
+  homeStat.gf += state.homeScore; homeStat.ga += state.awayScore;
+  awayStat.gf += state.awayScore; awayStat.ga += state.homeScore;
+
+  if (state.homeScore > state.awayScore) {
+    homeStat.w++; homeStat.pts += 2; awayStat.l++;
+  } else {
+    awayStat.w++; awayStat.pts += 2; homeStat.l++;
+  }
+
+  let bonusMsg = '';
+  const earnedBonus = pair.home === state.myTeam ? 2 : 0;
+  if (earnedBonus > 0) {
+    state.budget += earnedBonus;
+    bonusMsg = ' | 🎟 +2 млн ₽ за болельщиков на домашней арене!';
+    state.transferLogs.unshift(`🎟 Тур ${state.tour}: +2 млн ₽ за болельщиков (домашний матч против ${pair.away})`);
+  }
+
+  state.history.push({
+    tour: state.tour,
+    matchIndex: state.matchIndex,
+    home: pair.home,
+    away: pair.away,
+    hs: state.homeScore,
+    as: state.awayScore,
+    homeBonus: earnedBonus
+  });
+
+  document.getElementById('wheelOutcome').textContent = '✔ Матч записан: ' + pair.home + ' ' + pair.score + ' ' + pair.away + bonusMsg;
+  saveState();
+  renderAll();
+}
+
+function nextMatch() {
+  if (state.matchIndex + 1 < state.currentPairs.length) {
+    state.matchIndex++;
+  } else if (state.tour < 50) {
+    state.tour++;
+    state.matchIndex = 0;
+    state.currentPairs = generateTourPairs(state.tour);
+  } else {
+    return alert('Все 50 туров завершены! Нажмите «🔄 Новый сезон», чтобы начать следующий чемпионат.');
+  }
+  state.homeScore = 0;
+  state.awayScore = 0;
+  state.homeAttempts = 0;
+  state.awayAttempts = 0;
+  document.getElementById('matchEventsLog').innerHTML = '';
+  document.getElementById('wheelOutcome').textContent = 'Нажмите «Крутить колесо», чтобы выполнить 1-ю попытку';
+  saveState();
+  renderAll();
+}
+
+function undoLastMatch() {
+  const last = state.history.pop();
+  if (!last) return alert('Нет сыгранных матчей для отмены.');
+  const homeStat = state.stats.find(s => s.name === last.home);
+  const awayStat = state.stats.find(s => s.name === last.away);
+  homeStat.gp--; awayStat.gp--;
+  homeStat.gf -= last.hs; homeStat.ga -= last.as;
+  awayStat.gf -= last.as; awayStat.ga -= last.hs;
+  if (last.hs > last.as) { homeStat.w--; homeStat.pts -= 2; awayStat.l--; }
+  else { awayStat.w--; awayStat.pts -= 2; homeStat.l--; }
+  if (last.homeBonus) {
+    state.budget = Math.max(0, state.budget - last.homeBonus);
+  }
+  const targetPair = state.currentPairs.at(last.matchIndex);
+  if (state.tour === last.tour && targetPair) {
+    targetPair.played = false;
+    targetPair.score = null;
+  }
+  saveState();
+  renderAll();
+}
+
+function startNewSeason() {
+  if (confirm('Начать новый сезон? Турнирная таблица обнулится, а все ваши игроки, трансферы и бюджет сохранятся!')) {
+    initNewState(true);
+    document.getElementById('matchEventsLog').innerHTML = '';
+    document.getElementById('wheelOutcome').textContent = '🔄 Новый сезон начался! Нажмите «Крутить колесо».';
+    renderAll();
+  }
+}
+
+function resetSeason() {
+  if (confirm('Выполнить полный сброс (обнулится и таблица, и все трансферы)?')) {
+    initNewState(false);
+    document.getElementById('matchEventsLog').innerHTML = '';
+    document.getElementById('wheelOutcome').textContent = 'Сезон полностью сброшен.';
+    renderAll();
+  }
+}
+
+function changeMyTeam(newTeam) {
+  state.myTeam = newTeam;
+  saveState();
+  renderAll();
+}
+
+function buyPlayer(fromClub, idx) {
+  const clubRoster = state.rosters[fromClub];
+  const player = clubRoster.at(idx);
+  if (state.budget < player.price) return alert('Недостаточно бюджета!');
+  state.budget -= player.price;
+  clubRoster.splice(idx, 1);
+  state.rosters[state.myTeam].push(player);
+  state.transferLogs.unshift('✅ Куплен: ' + player.name + ' (OVR ' + player.ovr + ') из ' + fromClub + ' за ' + player.price + ' млн ₽');
+  saveState();
+  renderAll();
+}
+
+function sellPlayer(idx) {
+  const myRoster = state.rosters[state.myTeam];
+  if (myRoster.length <= 1) return alert('Нельзя продать последнего игрока!');
+  const player = myRoster.at(idx);
+  const sellPrice = Math.round(player.price * 0.8);
+  state.budget += sellPrice;
+  myRoster.splice(idx, 1);
+  state.rosters['СКА'].push(player);
+  state.transferLogs.unshift('💰 Продан: ' + player.name + ' за ' + sellPrice + ' млн ₽');
+  saveState();
+  renderAll();
+}
+
+function tradePlayer(fromClub, idx) {
+  const myRoster = state.rosters[state.myTeam];
+  const theirRoster = state.rosters[fromClub];
+  if (myRoster.length === 0 || theirRoster.length === 0) return;
+  const myPlayer = myRoster.shift();
+  const theirPlayer = theirRoster.splice(idx, 1).at(0);
+  myRoster.unshift(theirPlayer);
+  theirRoster.push(myPlayer);
+  state.transferLogs.unshift('🔄 Обмен 1-на-1 с ' + fromClub + ': отдан ' + myPlayer.name + ', получен ' + theirPlayer.name);
+  saveState();
+  renderAll();
+}
+
+function resetTransfers() {
+  state.rosters = buildAllRosters();
+  state.budget = 250;
+  state.transferLogs = [];
+  saveState();
+  renderAll();
+}
+function openDevModal() {
+  document.getElementById('devPasswordInput').value = '';
+  document.getElementById('devAuthError').style.display = 'none';
+  document.getElementById('devAuthBox').style.display = 'block';
+  document.getElementById('devSettingsBox').style.display = 'none';
+  document.getElementById('devModal').classList.add('open');
+}
+
+function closeDevModal() {
+  document.getElementById('devModal').classList.remove('open');
+}
+
+function unlockDev() {
+  const pass = document.getElementById('devPasswordInput').value;
+  if (pass === '190413') {
+    document.getElementById('devAuthError').style.display = 'none';
+    document.getElementById('devAuthBox').style.display = 'none';
+    document.getElementById('devSettingsBox').style.display = 'block';
+    renderWeights();
+  } else {
+    document.getElementById('devAuthError').style.display = 'block';
+  }
+}
+
+function renderWeights() {
+  const container = document.getElementById('weightsContainer');
+  const total = state.sectors.reduce((s, x) => s + Number(x.weight), 0) || 1;
+  container.innerHTML = state.sectors.map((s, i) => `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+      <span>${s.label}</span>
+      <div>
+        <input type="number" min="0" value="${s.weight}" style="width:65px;" onchange="updateWeightLive(${i}, this.value)">
+        <span style="display:inline-block; width:55px; text-align:right; color:#38bdf8;">${Math.round((s.weight / total) * 100)}%</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+function updateWeightLive(idx, val) {
+  const sector = state.sectors.at(idx);
+  if (sector) sector.weight = Math.max(0, Number(val));
+  renderWeights();
+}
+
+function applyWeights() { saveState(); closeDevModal(); renderMatch(); }
+function resetWeights() { state.sectors = JSON.parse(JSON.stringify(DEFAULT_SECTORS)); renderWeights(); }
+
+function getGoalProbPercent(attacker, defender) {
+  const sectors = getAttemptSectors(attacker, defender);
+  const totalW = sectors.reduce((s, x) => s + x.effectiveWeight, 0) || 1;
+  const goalW = sectors.filter(s => s.goals > 0).reduce((s, x) => s + x.effectiveWeight, 0);
+  return Math.round((goalW / totalW) * 100);
+}
+
+function renderMatch() {
+  const pair = state.currentPairs.at(state.matchIndex) || { home: state.myTeam, away: 'ЦСКА' };
+  const homeOvr = getTeamPower(pair.home);
+  const awayOvr = getTeamPower(pair.away);
+
+  const homeGoalProb = getGoalProbPercent(pair.home, pair.away);
+  const awayGoalProb = getGoalProbPercent(pair.away, pair.home);
+
+  document.getElementById('currentTourNum').textContent = state.tour;
+  document.getElementById('currentMatchNum').textContent = state.matchIndex + 1;
+
+  const bonusTag = document.getElementById('homeMatchBonusTag');
+  if (bonusTag) {
+    bonusTag.textContent = pair.home === state.myTeam ? '· 🎟 Домашний матч (+2 млн ₽ за болельщиков)' : '';
+  }
+
+  document.getElementById('homeTeamName').textContent = pair.home;
+  document.getElementById('awayTeamName').textContent = pair.away;
+  document.getElementById('homeTeamPower').textContent = 'Сила: ' + homeOvr + ' OVR (гол за бросок: ' + homeGoalProb + '%)';
+  document.getElementById('awayTeamPower').textContent = 'Сила: ' + awayOvr + ' OVR (гол за бросок: ' + awayGoalProb + '%)';
+
+  document.getElementById('homeAttemptsBadge').textContent = 'Попытки: ' + state.homeAttempts + ' / 10';
+  document.getElementById('awayAttemptsBadge').textContent = 'Попытки: ' + state.awayAttempts + ' / 10';
+
+  const homeBox = document.getElementById('homeTeamBox');
+  const awayBox = document.getElementById('awayTeamBox');
+  const turnEl = document.getElementById('turnIndicator');
+  const spinBtn = document.getElementById('spinBtn');
+
+  homeBox.classList.remove('active-turn');
+  awayBox.classList.remove('active-turn');
+
+  if (pair.played) {
+    turnEl.textContent = '✅ Матч завершён и записан в таблицу';
+    turnEl.style.color = '#4ade80';
+    spinBtn.disabled = true;
+  } else if (state.homeAttempts >= 10 && state.awayAttempts >= 10) {
+    turnEl.textContent = '🏁 Все 20 попыток (10+10) выполнены! Нажмите «✔ Записать в таблицу»';
+    turnEl.style.color = '#4ade80';
+    spinBtn.disabled = true;
+  } else {
+    const isHomeTurn = state.homeAttempts <= state.awayAttempts;
+    if (isHomeTurn) {
+      homeBox.classList.add('active-turn');
+    } else {
+      awayBox.classList.add('active-turn');
+    }
+    const nextTeam = isHomeTurn ? pair.home : pair.away;
+    const nextAttempt = (isHomeTurn ? state.homeAttempts : state.awayAttempts) + 1;
+    turnEl.textContent = `🏒 Сейчас атакует: ${nextTeam} (попытка ${nextAttempt} из 10)`;
+    turnEl.style.color = '#fbbf24';
+    spinBtn.disabled = false;
+  }
+
+  const diff = Math.round((homeOvr - awayOvr) * 10) / 10;
+  let favText = 'Силы команд равны';
+  if (diff > 0) favText = 'Фаворит: ' + pair.home + ' (+' + diff + ' OVR)';
+  if (diff < 0) favText = 'Фаворит: ' + pair.away + ' (+' + Math.abs(diff) + ' OVR)';
+  document.getElementById('oddsBanner').textContent = favText;
+
+  document.getElementById('homeScore').textContent = state.homeScore;
+  document.getElementById('awayScore').textContent = state.awayScore;
+}
+
+function renderMarket() {
+  const club = document.getElementById('marketClubSelect').value;
+  const list = state.rosters[club] || [];
+  document.getElementById('marketRosterList').innerHTML = list.map((p, i) => `
+    <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid #1e293b;">
+      <span>${p.name} <small style="color:#38bdf8;">[${p.ovr} OVR]</small> <small style="color:#94a3b8;">(${p.price} млн)</small></span>
+      <div style="white-space:nowrap;">
+        <button class="success" style="padding:4px 8px; font-size:12px;" onclick="buyPlayer('${club}', ${i})">Купить</button>
+        <button class="secondary" style="padding:4px 8px; font-size:12px;" onclick="tradePlayer('${club}', ${i})">1-на-1</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderConferenceTable(list, elementId) {
+  document.getElementById(elementId).innerHTML = list.map((s, idx) => {
+    const classes = [];
+    if (s.name === state.myTeam) classes.push('my-team');
+    if (idx === 7) classes.push('playoff-line');
+    return `
+      <tr class="${classes.join(' ')}">
+        <td>${idx + 1}</td>
+        <td>${s.name} <small style="color:#94a3b8;">(${getTeamPower(s.name)})</small></td>
+        <td>${s.gp}</td>
+        <td>${s.w}</td>
+        <td>${s.l}</td>
+        <td>${s.gf}:${s.ga}</td>
+        <td><strong>${s.pts}</strong></td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function renderAll() {
+  document.getElementById('headerTeam').textContent = state.myTeam;
+  renderMatch();
+
+  const sortFn = (a, b) => b.pts - a.pts || (b.gf - b.ga) - (a.gf - a.ga);
+  const west = state.stats.filter(s => s.conf === 'Запад').sort(sortFn);
+  const east = state.stats.filter(s => s.conf === 'Восток').sort(sortFn);
+
+  renderConferenceTable(west, 'westStandingsBody');
+  renderConferenceTable(east, 'eastStandingsBody');
+
+  document.getElementById('scheduleTourNum').textContent = state.tour;
+  document.getElementById('tourPairsList').innerHTML = state.currentPairs.map(p => `
+    <div class="card" style="border-color: ${p.home === state.myTeam || p.away === state.myTeam ? '#ef4444' : '#334155'}">
+      ${p.home} — ${p.away} <strong style="float:right; color:#38bdf8;">${p.played ? p.score : 'Ожидается'}</strong>
+    </div>
+  `).join('');
+
+  const westTop8 = west.slice(0, 8);
+  const eastTop8 = east.slice(0, 8);
+  const formatBracket = list => Array.from({ length: 4 }, (_, i) => {
+    const topTeam = list.at(i)?.name || '—';
+    const bottomTeam = list.at(7 - i)?.name || '—';
+    return `<div style="padding:6px 0; border-bottom:1px solid #1e293b;">1/4: <strong>${topTeam}</strong> vs <strong>${bottomTeam}</strong></div>`;
+  }).join('');
+  document.getElementById('westPlayoff').innerHTML = formatBracket(westTop8);
+  document.getElementById('eastPlayoff').innerHTML = formatBracket(eastTop8);
+
+  const mySelect = document.getElementById('myTeamSelect');
+  mySelect.innerHTML = CLUBS_DATA.map(c => `<option value="${c.name}" ${c.name === state.myTeam ? 'selected' : ''}>${c.name} (${c.conf})</option>`).join('');
+  document.getElementById('teamBudget').textContent = state.budget + ' млн ₽';
+  document.getElementById('myTeamOvrBadge').textContent = getTeamPower(state.myTeam) + ' OVR';
+  document.getElementById('myRosterTitle').textContent = state.myTeam;
+
+  const myPlayers = state.rosters[state.myTeam] || [];
+  document.getElementById('myRosterCount').textContent = myPlayers.length;
+  document.getElementById('myRosterList').innerHTML = myPlayers.map((p, i) => `
+    <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid #1e293b;">
+      <span>${p.name} <small style="color:#38bdf8;">[${p.ovr} OVR]</small> <small style="color:#94a3b8;">(${p.price} млн)</small></span>
+      <button class="danger" style="padding:4px 8px; font-size:12px;" onclick="sellPlayer(${i})">Продать</button>
+    </div>
+  `).join('');
+
+  const marketSelect = document.getElementById('marketClubSelect');
+  const prevMarket = marketSelect.value;
+  marketSelect.innerHTML = CLUBS_DATA.filter(c => c.name !== state.myTeam).map(c => `<option value="${c.name}" ${c.name === prevMarket ? 'selected' : ''}>${c.name} (${getTeamPower(c.name)} OVR)</option>`).join('');
+  renderMarket();
+
+  document.getElementById('transferHistory').innerHTML = state.transferLogs.length ? state.transferLogs.map(l => `<div>${l}</div>`).join('') : 'Операций пока не было.';
+}
+
+renderAll();
+</script>
+</body>
+</html>
